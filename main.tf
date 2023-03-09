@@ -94,16 +94,16 @@ resource "aws_security_group" "main" {
   )
 }
 
-#resource "aws_launch_template" "main" {
-#  name_prefix            = "${var.env}-${var.component}-template"
-#  image_id               = data.aws_ami.centos8.id
-#  instance_type          = var.instance_type
+resource "aws_launch_template" "main" {
+  name_prefix            = "${var.env}-${var.component}-template"
+  image_id               = data.aws_ami.centos8.id
+  instance_type          = var.instance_type
 #  vpc_security_group_ids = [aws_security_group.main.id]
 #  iam_instance_profile {
 #    arn = aws_iam_instance_profile.profile.arn
 #  }
-#}
-#
+}
+
 
 resource "aws_autoscaling_group" "asg" {
   name                = "${var.env}-${var.component}-asg"
