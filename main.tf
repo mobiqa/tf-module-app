@@ -78,7 +78,7 @@ resource "aws_security_group" "main" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-#    cidr_blocks = var.bastion_cidr
+    cidr_blocks = var.bastion_cidr
   }
 
   egress {
