@@ -109,7 +109,7 @@ resource "aws_launch_template" "main" {
     arn = aws_iam_instance_profile.profile.arn
   }
 
-instance_market_options {
+  instance_market_options {
   market_type = "spot"
 }
 }
