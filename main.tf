@@ -50,9 +50,7 @@ resource "aws_iam_policy" "policy" {
           "arn:aws:ssm:us-east-1:460304078594:parameter/${var.env}.elasticache*",
           "arn:aws:ssm:us-east-1:460304078594:parameter/${var.env}.rds*",
           "arn:aws:ssm:us-east-1:460304078594:parameter/${var.env}.rabbitmq*"
-
         ]
-
       },
       {
         "Sid" : "VisualEditor1",
@@ -68,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "role-attach" {
   role       = aws_iam_role.role.name
   policy_arn = aws_iam_policy.policy.arn
 }
-#
+
 resource "aws_security_group" "main" {
   name        = "${var.env}-${var.component}-security-group"
   description = "${var.env}-${var.component}-security-group"
@@ -90,6 +88,14 @@ resource "aws_security_group" "main" {
     cidr_blocks = var.bastion_cidr
   }
 
+  ingress {
+    description = "PROMETHEUS"
+    from_port   = 9100
+    to_port     = 9100
+    protocol    = "tcp"
+    cidr_blocks = var.monitor_cidr
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -104,7 +110,7 @@ resource "aws_security_group" "main" {
 }
 
 resource "aws_launch_template" "main" {
-  name_prefix            = "${var.env}-${var.component}-template"
+  name                   = "${var.env}-${var.component}-template"
   image_id               = data.aws_ami.centos8.id
   instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.main.id]
@@ -115,10 +121,9 @@ resource "aws_launch_template" "main" {
   }
 
   instance_market_options {
-  market_type = "spot"
+    market_type = "spot"
+  }
 }
-}
-
 
 resource "aws_autoscaling_group" "asg" {
   name                = "${var.env}-${var.component}-asg"
@@ -127,6 +132,7 @@ resource "aws_autoscaling_group" "asg" {
   desired_capacity    = var.desired_capacity
   force_delete        = true
   vpc_zone_identifier = var.subnet_ids
+  target_group_arns   = [aws_lb_target_group.target_group.arn]
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -140,5 +146,63 @@ resource "aws_autoscaling_group" "asg" {
       value               = tag.value.value
       propagate_at_launch = true
     }
+  }
+}
+
+resource "aws_route53_record" "app" {
+  zone_id = "Z00609824R2L4GMJAHPM"
+  name    = "${var.component}-${var.env}.devopsb70.online"
+  type    = "CNAME"
+  ttl     = 30
+  records = [var.alb]
+}
+
+resource "aws_lb_target_group" "target_group" {
+  name     = "${var.component}-${var.env}"
+  port     = var.app_port
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    interval            = 5
+    path                = "/health"
+    protocol            = "HTTP"
+    timeout             = 2
+  }
+
+}
+
+// THis is for backend components
+resource "aws_lb_listener_rule" "backend_rule" {
+  count        = var.listener_priority != 0 ? 1 : 0
+  listener_arn = var.listener
+  priority     = var.listener_priority
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.target_group.arn
+  }
+
+  condition {
+    host_header {
+      values = ["${var.component}-${var.env}.devopsb70.online"]
+    }
+  }
+}
+
+
+// This is only for frontend
+resource "aws_lb_listener" "frontend" {
+  count             = var.listener_priority == 0 ? 1 : 0
+  load_balancer_arn = var.alb_arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.target_group.arn
   }
 }
